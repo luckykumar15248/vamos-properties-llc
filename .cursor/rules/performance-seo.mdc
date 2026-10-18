@@ -1,0 +1,31 @@
+---
+description: Core Web Vitals, next/image, Metadata API, and JSON-LD for public pages
+globs: app/**/*.tsx,app/**/sitemap.ts,app/**/robots.ts
+alwaysApply: false
+---
+
+# Performance and SEO
+
+Public pages should ship a static shell. Cache marketing UI with `use cache` and `cacheLife`. Leave the lead action dynamic. Do not import client-only libraries into a page that can stay a Server Component.
+
+## Images and metadata
+
+- Use `next/image` with explicit `width` and `height`, or a known `fill` parent. `priority` is only for the hero.
+- Founder photos live in `public/` or an allowed remote host. Write a specific `alt` that names the person.
+- Export `metadata` or `generateMetadata` from the page. Set `title.absolute` or a root title template, a unique description, canonical, and `alternates.languages` for the Spanish foreclosure page.
+- Add `app/sitemap.ts` and `app/robots.ts` once real routes exist.
+
+## JSON-LD
+
+Render JSON-LD in the Server Component. Escape `<` so the script cannot break out of the tag.
+
+```tsx
+<script
+  type="application/ld+json"
+  dangerouslySetInnerHTML={{
+    __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c"),
+  }}
+/>
+```
+
+Use `LocalBusiness` on the home and contact pages, and `FAQPage` only for questions that are visible in the FAQ.

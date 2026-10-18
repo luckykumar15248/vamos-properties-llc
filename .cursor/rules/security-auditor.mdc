@@ -1,0 +1,26 @@
+---
+description: Lead-form validation, rate limits, honeypots, TCPA consent, and advertising limits
+globs: lib/leads/**/*.ts,lib/dal/**/*.ts,app/api/**/*.ts,app/**/*.tsx
+alwaysApply: false
+---
+
+# Security and compliance
+
+Treat every lead submission as untrusted. Validate with a schema, then rate-limit by IP and phone before writing a row. Reject the submission when the hidden honeypot is filled. Store the consent text, timestamp, page URL, and whether SMS and calls were allowed.
+
+## Boundaries
+
+- Admin pages check the session inside the data layer. Hiding a link is not authorization.
+- Verify Twilio and Resend webhook signatures before updating a lead. Compare secrets in constant time.
+- Secrets stay in environment variables. Never print a full phone number or message body in client logs.
+
+## Claims the site must not make
+
+- Do not promise that a foreclosure stops immediately, that credit is repaired, or that an offer matches a listed price.
+- Take-over-payments copy must say the loan can stay in the seller's name and that a missed payment can still affect their credit.
+- A lawyer reviews foreclosure timelines and takeover language before they ship.
+
+```tsx
+<label className="sr-only" htmlFor="company">Company</label>
+<input id="company" name="company" tabIndex={-1} autoComplete="off" className="hidden" />
+```

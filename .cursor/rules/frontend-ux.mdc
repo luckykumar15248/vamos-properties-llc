@@ -1,0 +1,28 @@
+---
+description: Tailwind 4, mobile-first layout, and accessibility for seller-facing UI
+globs: app/**/*.tsx,components/**/*.tsx,app/**/*.css
+alwaysApply: false
+---
+
+# Frontend UX
+
+Design mobile-first for a homeowner on an iPhone. The public page has one job: call, or finish the short form. Use Tailwind 4 utilities. Add tokens in `@theme` inside `app/globals.css`. Do not add a legacy `tailwind.config.js`.
+
+## Layout
+
+- Base styles are the phone. Add `sm:` and `md:` only when the layout needs more room.
+- Inputs use at least `text-base` (16px) so iOS does not zoom on focus.
+- Tap targets are at least 44px. The phone number is a `tel:` link in a bar fixed to the bottom, with `pb` and `env(safe-area-inset-bottom)` so it does not cover the form.
+- One primary action per screen. Keep listings, blog, and chat widgets off the seller hero.
+
+## Access
+
+- Label every input. Do not rely on placeholder text alone.
+- Keep a visible focus ring. Honor `prefers-reduced-motion` by skipping nonessential transitions.
+- Motion is limited to color, opacity, and short transforms on hover or press.
+
+```tsx
+<a href="tel:+16025550100" className="inline-flex min-h-11 items-center px-4">
+  Call Vamos
+</a>
+```

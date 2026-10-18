@@ -1,0 +1,31 @@
+---
+description: Next.js 16 App Router structure, boundaries, and scaling rules for Vamos Properties
+alwaysApply: true
+---
+
+# Architecture
+
+This app is Next.js 16 with `cacheComponents` and `partialPrefetching` already on. Read `node_modules/next/dist/docs/` before adding a framework API. Do not add the Pages Router, `middleware.ts`, or the pre-Cache Components `unstable_cache` model. Request interception belongs in root `proxy.ts`, and only for redirects or headers.
+
+## Shape
+
+- Routes live in `app/`. Marketing pages are Server Components. Client Components are leaves for forms, menus, and other interaction.
+- Group URLs without changing them: `app/(marketing)` and `app/(admin)`. Non-routes go in `_components` or `lib/`.
+- Public lead capture is a Server Action. Admin mutations are Server Actions. Webhooks from Resend and Twilio are Route Handlers.
+- Put reads and writes in a server-only data access layer under `lib/dal`. Pages receive DTOs, not Prisma rows.
+- Marketing pages may use `use cache` with an explicit `cacheLife`. Lead, admin, and webhook paths stay dynamic.
+
+## Scale
+
+- One shared header, footer, and lead form. Suburb pages pass city content into that shell.
+- Ship the seller site before the blog editor and before any property-listing UI.
+- Keep acquired-home inventory off the seller navigation.
+
+```tsx
+// app/(marketing)/stop-foreclosure/page.tsx
+export default async function Page() {
+  "use cache";
+  cacheLife("hours");
+  return <StopForeclosurePage />;
+}
+```

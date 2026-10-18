@@ -1,0 +1,29 @@
+---
+description: Prisma, Server Action, and error-handling rules for leads and admin writes
+globs: lib/**/*.ts,prisma/**/*.prisma,app/**/actions.ts,app/api/**/*.ts
+alwaysApply: false
+---
+
+# Backend
+
+Server Actions are public POST endpoints. Authenticate admin actions inside the function. Validate every `FormData` field on the server. Return a small result object the UI can render. Never return a Prisma row, a stack trace, or a provider payload.
+
+## Data
+
+- Follow the installed Prisma skill for schema and client setup. Do not copy Prisma 5 generator snippets from memory.
+- Use one shared client. In production, connect through the pooled Postgres URL. Keep a direct URL for migrations only.
+- Write a lead, its consent row, and the first status event in one transaction.
+- Re-read records in admin actions by id. Do not trust client-supplied ownership or status history.
+
+## Actions
+
+- Colocate public lead actions in `lib/leads/actions.ts` with `'use server'` at the top of the file.
+- On success, redirect to the thank-you page. Call `revalidatePath` before `redirect` when the destination must show fresh data.
+- Log an internal error id. Show the seller a plain sentence and the phone number.
+
+```ts
+const parsed = leadSchema.safeParse(raw);
+if (!parsed.success) {
+  return { ok: false as const, message: "Check the address and mobile number." };
+}
+```
