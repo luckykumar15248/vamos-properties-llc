@@ -1,0 +1,36 @@
+---
+description: Seller-site QA for the form, mobile bar, page sections, and claims that must stay honest
+globs: app/**/*.tsx,components/**/*.tsx,lib/**/*.ts
+alwaysApply: false
+---
+
+# QA tester
+
+Check the seller path the way a homeowner on an iPhone would. A screenshot of one section is not a pass. Exercise the control, then look at the other pages that share it.
+
+## Every public page
+
+- One visible H1. The phone number is a `tel:` link. The bottom call bar is on screen at phone width and does not cover the submit button.
+- Inputs are at least 16px. Tap targets are at least 44px. Every field has a visible label.
+- Light and dark both keep body text readable. White and gray sections stay visually distinct in both themes.
+- Focus rings stay visible. `prefers-reduced-motion` is not required to complete the form.
+
+## Lead form
+
+- Address, name, and mobile are required. Email is optional. A trustee-sale date appears only when the situation is a Notice of Trustee's Sale.
+- The hero address lookup fills the property field on `#offer` and moves focus to the name field. It does not create a lead by itself.
+- Submitting without consent, or with a short address, stays on the page and names the problem.
+- A filled honeypot (`company`) does not write a row.
+- Success redirects to `/thank-you`. A database failure shows the phone number and does not print a stack trace or the seller's number in the log line.
+- The same phone and address on the same Phoenix day updates the open lead instead of inserting a second one.
+
+## Copy that fails the test
+
+- “Foreclosure stops immediately,” “we repair your credit,” or “full market value” / a promise to match a listed price.
+- A payment-takeover page that omits this: the loan can stay in the seller’s name, the lender may call it due, and a later missed payment can still hurt credit.
+- Invented reviews, star ratings, press logos, or founder photos presented as the real Patrick and Jaime. Stand-in portraits must stay labeled as stand-ins.
+- Acquired-home listings in the seller navigation.
+
+## Routes to recheck after a shared component changes
+
+`/`, `/stop-foreclosure`, `/take-over-payments`, `/about`, `/contact`, `/es/stop-foreclosure`, and one `/areas/[city]` page. The Spanish page stays `lang="es"` and links back to the English foreclosure page.

@@ -1,0 +1,124 @@
+// use prisma-8
+
+model User {
+  id            Int         @id @default(autoincrement())
+  email         String      @unique
+  name          String
+  role          String      @default("owner")
+  passwordHash  String
+  assignedLeads Lead[]
+  events        LeadEvent[]
+  createdAt     TimestamptzString @default(now())
+}
+
+model Lead {
+  id              Int         @id @default(autoincrement())
+  address         String
+  unit            String?
+  city            String?
+  name            String
+  phone           String
+  email           String?
+  message         String?
+  situation       String
+  trusteeSaleDate String?
+  preferredPath   String
+  language        String
+  status          String      @default("new")
+  lostReason      String?
+  sourcePath      String
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  assignedToId    Int?
+  assignedTo      User?       @relation(fields: [assignedToId], references: [id])
+  consents        Consent[]
+  events          LeadEvent[]
+  createdAt       TimestamptzString @default(now())
+  updatedAt       temporal.updatedAtString()
+
+  @@index([phone])
+  @@index([status])
+  @@index([createdAt])
+  @@index([trusteeSaleDate])
+  @@index([assignedToId])
+}
+
+model Consent {
+  id          Int               @id @default(autoincrement())
+  lead        Lead              @relation(fields: [leadId], references: [id])
+  leadId      Int
+  channel     String
+  textVersion String
+  pageUrl     String
+  ipHash      String
+  grantedAt   TimestamptzString @default(now())
+
+  @@index([leadId])
+}
+
+model LeadEvent {
+  id         Int               @id @default(autoincrement())
+  lead       Lead              @relation(fields: [leadId], references: [id])
+  leadId     Int
+  author     String            @default("system")
+  authorId   Int?
+  authorUser User?             @relation(fields: [authorId], references: [id])
+  type       String
+  body       String
+  createdAt  TimestamptzString @default(now())
+
+  @@index([leadId])
+  @@index([authorId])
+}
+
+model Listing {
+  id              Int               @id @default(autoincrement())
+  title           String
+  slug            String            @unique
+  address         String
+  city            String?
+  beds            Int?
+  baths           String?
+  sqft            Int?
+  propertyType    String?
+  price           String?
+  listPrice       Int?
+  previousPrice   Int?
+  priceChangedAt  TimestamptzString?
+  monthlyPayment  Int?
+  terms           String?
+  status          String            @default("draft")
+  featured        Boolean           @default(false)
+  summary         String?
+  description     String?
+  features        String?
+  neighborhood    String?
+  schools         String?
+  yearBuilt       Int?
+  metaTitle       String?
+  metaDescription String?
+  keywords        String?
+  localTags       String?
+  photos          String?
+  publishedAt     TimestamptzString?
+  prices          ListingPrice[]
+  createdAt       TimestamptzString @default(now())
+  updatedAt       temporal.updatedAtString()
+
+  @@index([status])
+  @@index([city])
+  @@index([listPrice])
+  @@index([featured])
+}
+
+model ListingPrice {
+  id             Int               @id @default(autoincrement())
+  listing        Listing           @relation(fields: [listingId], references: [id])
+  listingId      Int
+  amount         Int
+  previousAmount Int?
+  recordedAt     TimestamptzString @default(now())
+
+  @@index([listingId])
+}
