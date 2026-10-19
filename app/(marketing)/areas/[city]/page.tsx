@@ -14,6 +14,8 @@ export function generateStaticParams() {
 
 type AreaParams = { params: Promise<{ city: string }> };
 
+export const instant = false;
+
 export async function generateMetadata({ params }: AreaParams): Promise<Metadata> {
   const { city } = await params;
   const area = getArea(city);

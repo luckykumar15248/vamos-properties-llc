@@ -3,8 +3,7 @@
 import { usePathname } from "next/navigation";
 import { site } from "@/lib/site";
 
-export function CallBar() {
-  const spanish = usePathname().startsWith("/es");
+export function CallBar({ spanish }: { spanish: boolean }) {
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-40 bg-navy md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
@@ -18,4 +17,9 @@ export function CallBar() {
       </div>
     </div>
   );
+}
+
+export function CallBarLive() {
+  const spanish = usePathname().startsWith("/es");
+  return <CallBar spanish={spanish} />;
 }

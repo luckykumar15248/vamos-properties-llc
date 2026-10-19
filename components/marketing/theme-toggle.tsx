@@ -1,10 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 
-export function ThemeToggle() {
-  const spanish = usePathname().startsWith("/es");
+export function ThemeToggle({ spanish }: { spanish: boolean }) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
 
   useEffect(() => {

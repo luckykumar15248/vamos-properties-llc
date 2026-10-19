@@ -19,8 +19,7 @@ const spanishLinks = [
   { href: "/stop-foreclosure", label: "Ver en inglés" },
 ];
 
-export function SiteHeader() {
-  const spanish = usePathname().startsWith("/es");
+export function SiteHeader({ spanish }: { spanish: boolean }) {
   const links = spanish ? spanishLinks : englishLinks;
 
   return (
@@ -53,10 +52,10 @@ export function SiteHeader() {
           <a href={site.phoneTel} className="inline-flex min-h-11 items-center whitespace-nowrap bg-amber px-4 text-sm font-semibold text-amber-ink">
             {site.phoneDisplay}
           </a>
-          <ThemeToggle />
+          <ThemeToggle spanish={spanish} />
         </nav>
         <div className="flex items-center lg:hidden">
-          <ThemeToggle />
+          <ThemeToggle spanish={spanish} />
           <details className="relative">
             <summary className="min-h-11 cursor-pointer list-none px-3 py-3 text-sm text-white [&::-webkit-details-marker]:hidden">
               {spanish ? "Menú" : "Menu"}
@@ -76,4 +75,9 @@ export function SiteHeader() {
       </div>
     </header>
   );
+}
+
+export function SiteHeaderLive() {
+  const spanish = usePathname().startsWith("/es");
+  return <SiteHeader spanish={spanish} />;
 }

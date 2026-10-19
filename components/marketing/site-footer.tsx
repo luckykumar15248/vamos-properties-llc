@@ -5,9 +5,7 @@ import { usePathname } from "next/navigation";
 import { areas } from "@/lib/content/areas";
 import { site, spanishForeclosurePath } from "@/lib/site";
 
-export function SiteFooter() {
-  const spanish = usePathname().startsWith("/es");
-
+export function SiteFooter({ spanish }: { spanish: boolean }) {
   if (spanish) {
     return (
       <footer className="bg-navy text-white" lang="es">
@@ -131,4 +129,9 @@ export function SiteFooter() {
       </p>
     </footer>
   );
+}
+
+export function SiteFooterLive() {
+  const spanish = usePathname().startsWith("/es");
+  return <SiteFooter spanish={spanish} />;
 }
