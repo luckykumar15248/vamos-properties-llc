@@ -6,6 +6,7 @@ import { Comparison } from "@/components/marketing/comparison";
 import { FaqList } from "@/components/marketing/faq-list";
 import { LeadForm } from "@/components/marketing/lead-form";
 import { Section } from "@/components/marketing/section";
+import { hreflang } from "@/lib/i18n/routes";
 import { takeoverFaqs } from "@/lib/content/faqs";
 import { site } from "@/lib/site";
 
@@ -13,7 +14,7 @@ export const metadata = {
   title: "Take over mortgage payments in Phoenix",
   description:
     "Vamos can bring a delinquent Phoenix mortgage current and make the payments. The loan can stay in your name. Read the risks.",
-  alternates: { canonical: "/take-over-payments" },
+  alternates: { canonical: "/take-over-payments", ...hreflang("/take-over-payments", "/es/tomar-los-pagos") },
 };
 
 const steps = [

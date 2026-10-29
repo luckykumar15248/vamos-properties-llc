@@ -126,7 +126,9 @@ export function ListingForm({
           defaultValue={listing?.photos.join("\n") ?? ""}
           className="mt-1 w-full border border-line bg-paper px-3 py-3 text-base text-ink"
         />
-        <p className="mt-1 text-sm text-muted">One image URL per line. Uploaded photos are added to this list the next time you save.</p>
+        <p className="mt-1 text-sm text-muted">
+          One image URL per line. Copy a link from the <a href="/admin/media" className="font-semibold text-link">media library</a>, or upload below.
+        </p>
       </div>
       <div>
         <label className="block text-sm text-ink" htmlFor="uploads">

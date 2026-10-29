@@ -8,6 +8,8 @@ const links = [
   { href: "/admin", label: "Dashboard" },
   { href: "/admin/pipeline", label: "Lead pipeline" },
   { href: "/admin/listings", label: "Listings" },
+  { href: "/admin/media", label: "Media library" },
+  { href: "/admin/blog", label: "Blog" },
   { href: "/admin/bank", label: "Data bank" },
   { href: "/admin/settings", label: "Settings" },
 ];

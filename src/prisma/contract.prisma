@@ -8,6 +8,9 @@ model User {
   passwordHash  String
   assignedLeads Lead[]
   events        LeadEvent[]
+  mediaAssets   MediaAsset[]
+  posts         Post[]
+  comments      Comment[]
   createdAt     TimestamptzString @default(now())
 }
 
@@ -121,4 +124,121 @@ model ListingPrice {
   recordedAt     TimestamptzString @default(now())
 
   @@index([listingId])
+}
+
+model MediaAsset {
+  id          Int               @id @default(autoincrement())
+  key         String            @unique
+  url         String
+  fileName    String
+  contentType String
+  kind        String
+  sizeBytes   Int
+  folder      String?
+  alt         String?
+  createdBy   User?             @relation(fields: [createdById], references: [id])
+  createdById Int?
+  createdAt   TimestamptzString @default(now())
+
+  @@index([kind])
+  @@index([folder])
+  @@index([createdAt])
+  @@index([createdById])
+}
+
+model Post {
+  id               Int               @id @default(autoincrement())
+  slug             String            @unique
+  title            String
+  excerpt          String?
+  body             String
+  status           String            @default("draft")
+  featuredImageUrl String?
+  featuredImageAlt String?
+  metaTitle        String?
+  metaDescription  String?
+  canonicalUrl     String?
+  ogImageUrl       String?
+  publishedAt      TimestamptzString?
+  author           User?             @relation(fields: [authorId], references: [id])
+  authorId         Int?
+  categories       PostCategory[]
+  tags             PostTag[]
+  comments         Comment[]
+  createdAt        TimestamptzString @default(now())
+  updatedAt        temporal.updatedAtString()
+
+  @@index([status])
+  @@index([publishedAt])
+  @@index([authorId])
+}
+
+model Category {
+  id          Int               @id @default(autoincrement())
+  slug        String            @unique
+  name        String
+  description String?
+  parent      Category?         @relation("CategoryParent", fields: [parentId], references: [id])
+  parentId    Int?
+  children    Category[]        @relation("CategoryParent")
+  posts       PostCategory[]
+  createdAt   TimestamptzString @default(now())
+  updatedAt   temporal.updatedAtString()
+
+  @@index([parentId])
+}
+
+model Tag {
+  id        Int               @id @default(autoincrement())
+  slug      String            @unique
+  name      String
+  posts     PostTag[]
+  createdAt TimestamptzString @default(now())
+}
+
+model PostCategory {
+  id         Int      @id @default(autoincrement())
+  post       Post     @relation(fields: [postId], references: [id])
+  postId     Int
+  category   Category @relation(fields: [categoryId], references: [id])
+  categoryId Int
+
+  @@unique([postId, categoryId])
+  @@index([postId])
+  @@index([categoryId])
+}
+
+model PostTag {
+  id     Int  @id @default(autoincrement())
+  post   Post @relation(fields: [postId], references: [id])
+  postId Int
+  tag    Tag  @relation(fields: [tagId], references: [id])
+  tagId  Int
+
+  @@unique([postId, tagId])
+  @@index([postId])
+  @@index([tagId])
+}
+
+model Comment {
+  id          Int               @id @default(autoincrement())
+  post        Post              @relation(fields: [postId], references: [id])
+  postId      Int
+  parent      Comment?          @relation("CommentThread", fields: [parentId], references: [id])
+  parentId    Int?
+  replies     Comment[]         @relation("CommentThread")
+  author      User?             @relation(fields: [authorId], references: [id])
+  authorId    Int?
+  authorName  String
+  authorEmail String?
+  body        String
+  status      String            @default("pending")
+  isStaff     Boolean           @default(false)
+  createdAt   TimestamptzString @default(now())
+  updatedAt   temporal.updatedAtString()
+
+  @@index([postId])
+  @@index([parentId])
+  @@index([status])
+  @@index([authorId])
 }

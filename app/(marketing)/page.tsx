@@ -11,6 +11,7 @@ import { LeadForm } from "@/components/marketing/lead-form";
 import { LocalBusinessJsonLd } from "@/components/marketing/local-business";
 import { Section } from "@/components/marketing/section";
 import { TrustRow } from "@/components/marketing/trust-row";
+import { hreflang } from "@/lib/i18n/routes";
 import { homeFaqs } from "@/lib/content/faqs";
 import { guides } from "@/lib/content/guides";
 import { site } from "@/lib/site";
@@ -21,7 +22,7 @@ export const metadata = {
   },
   description:
     "Vamos Properties buys houses as-is in Maricopa County and can talk through a mortgage that is behind. Call Patrick or Jaime.",
-  alternates: { canonical: "/" },
+  alternates: { canonical: "/", ...hreflang("/", "/es") },
 };
 
 const reasons = [

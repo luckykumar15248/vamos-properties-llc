@@ -4,13 +4,14 @@ import { ClosingBand } from "@/components/marketing/closing-band";
 import { Founders } from "@/components/marketing/founders";
 import { LeadForm } from "@/components/marketing/lead-form";
 import { Section } from "@/components/marketing/section";
+import { hreflang } from "@/lib/i18n/routes";
 import { site } from "@/lib/site";
 
 export const metadata = {
   title: "About Patrick and Jaime",
   description:
     "Vamos Properties LLC is Patrick and Jaime, local buyers who help Maricopa County homeowners sell as-is or talk through a mortgage that is behind.",
-  alternates: { canonical: "/about" },
+  alternates: { canonical: "/about", ...hreflang("/about", "/es/nosotros") },
 };
 
 export default async function AboutPage() {

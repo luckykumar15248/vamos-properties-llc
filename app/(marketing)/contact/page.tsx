@@ -3,13 +3,14 @@ import Link from "next/link";
 import { LeadForm } from "@/components/marketing/lead-form";
 import { LocalBusinessJsonLd } from "@/components/marketing/local-business";
 import { Section } from "@/components/marketing/section";
+import { hreflang } from "@/lib/i18n/routes";
 import { site } from "@/lib/site";
 
 export const metadata = {
   title: "Contact",
   description:
     "Call or text Vamos Properties in Phoenix, or send the address. Patrick or Jaime reply the same day.",
-  alternates: { canonical: "/contact" },
+  alternates: { canonical: "/contact", ...hreflang("/contact", "/es/contacto") },
 };
 
 export default async function ContactPage() {

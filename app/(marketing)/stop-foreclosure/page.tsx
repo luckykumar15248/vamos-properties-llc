@@ -5,6 +5,7 @@ import { ClosingBand } from "@/components/marketing/closing-band";
 import { FaqList } from "@/components/marketing/faq-list";
 import { LeadForm } from "@/components/marketing/lead-form";
 import { Section } from "@/components/marketing/section";
+import { hreflang } from "@/lib/i18n/routes";
 import { foreclosureFaqs } from "@/lib/content/faqs";
 import { site, spanishForeclosurePath } from "@/lib/site";
 
@@ -14,10 +15,7 @@ export const metadata = {
     "If you have a Notice of Trustee's Sale in Maricopa County, Vamos can talk through a cash sale before the auction date.",
   alternates: {
     canonical: "/stop-foreclosure",
-    languages: {
-      en: "/stop-foreclosure",
-      es: spanishForeclosurePath,
-    },
+    ...hreflang("/stop-foreclosure", spanishForeclosurePath),
   },
 };
 

@@ -6,6 +6,7 @@ import { Comparison } from "@/components/marketing/comparison";
 import { FaqList } from "@/components/marketing/faq-list";
 import { LeadForm } from "@/components/marketing/lead-form";
 import { Section } from "@/components/marketing/section";
+import { hreflang } from "@/lib/i18n/routes";
 import { cashFaqs } from "@/lib/content/faqs";
 import { site } from "@/lib/site";
 
@@ -13,7 +14,7 @@ export const metadata = {
   title: "Get a cash offer on your Phoenix house",
   description:
     "Vamos buys Maricopa County houses as-is. No repairs, no showings, and no fee to ask. Patrick or Jaime call the same day.",
-  alternates: { canonical: "/cash-offer" },
+  alternates: { canonical: "/cash-offer", ...hreflang("/cash-offer", "/es/oferta-en-efectivo") },
 };
 
 const steps = [

@@ -4,6 +4,7 @@ import { ClosingBand } from "@/components/marketing/closing-band";
 import { FaqList } from "@/components/marketing/faq-list";
 import { LeadForm } from "@/components/marketing/lead-form";
 import { Section } from "@/components/marketing/section";
+import { hreflang } from "@/lib/i18n/routes";
 import { site, spanishForeclosurePath } from "@/lib/site";
 
 const faqs = [
@@ -40,10 +41,7 @@ export const metadata = {
     "Si recibió un aviso de venta del fiduciario en el condado de Maricopa, hable con Vamos sobre una venta de contado antes de la fecha.",
   alternates: {
     canonical: spanishForeclosurePath,
-    languages: {
-      en: "/stop-foreclosure",
-      es: spanishForeclosurePath,
-    },
+    ...hreflang("/stop-foreclosure", spanishForeclosurePath),
   },
 };
 

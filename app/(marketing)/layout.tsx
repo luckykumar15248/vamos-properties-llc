@@ -6,13 +6,13 @@ import { SiteHeader, SiteHeaderLive } from "@/components/marketing/site-header";
 export default function MarketingLayout({ children }: LayoutProps<"/">) {
   return (
     <>
-      <Suspense fallback={<SiteHeader spanish={false} />}>
+      <Suspense fallback={<SiteHeader spanish={false} alternatePath="/es" />}>
         <SiteHeaderLive />
       </Suspense>
       <main id="content" className="pb-24 md:pb-0">
         {children}
       </main>
-      <Suspense fallback={<SiteFooter spanish={false} />}>
+      <Suspense fallback={<SiteFooter spanish={false} alternatePath="/es" />}>
         <SiteFooterLive />
       </Suspense>
       <Suspense fallback={<CallBar spanish={false} />}>
