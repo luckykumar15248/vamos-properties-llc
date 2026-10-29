@@ -52,17 +52,22 @@ export async function submitComment(_previous: CommentFormState, formData: FormD
 
   try {
     const db = getDb();
-    const post = await db.orm.public.Post.where({ slug: parsed.data.slug }).select("id", "status").first();
+    const post = await db.post.findFirst({
+      where: { slug: parsed.data.slug },
+      select: { id: true, status: true },
+    });
     if (!post || post.status !== "published") {
       return { message: "That article is not open for comments.", fieldErrors: {} };
     }
-    await db.orm.public.Comment.create({
-      postId: post.id,
-      authorName: parsed.data.name,
-      authorEmail: parsed.data.email,
-      body: parsed.data.body,
-      status: "pending",
-      isStaff: false,
+    await db.comment.create({
+      data: {
+        postId: post.id,
+        authorName: parsed.data.name,
+        authorEmail: parsed.data.email,
+        body: parsed.data.body,
+        status: "pending",
+        isStaff: false,
+      },
     });
   } catch (error) {
     console.error("comment_write_failed", {

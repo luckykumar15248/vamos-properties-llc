@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isMysqlDatabaseUrl } from "@/lib/db/mysql-url";
 import { getDb } from "@/src/prisma/db";
 import { requireAdmin } from "@/lib/admin/auth";
 import { editorHtml, excerptFromHtml } from "@/lib/blog/content";
@@ -94,25 +95,37 @@ type PostRow = {
   metaDescription: string | null;
   canonicalUrl: string | null;
   ogImageUrl: string | null;
-  publishedAt: string | Date | null;
+  publishedAt: Date | string | null;
   authorId: number | null;
-  updatedAt: string | Date;
+  updatedAt: Date | string;
 };
 
-function iso(value: string | Date | null | undefined) {
-  if (!value) return null;
-  return String(value);
+function toIso(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  return d instanceof Date ? d.toISOString() : d;
 }
 
 async function graph() {
+  if (!isMysqlDatabaseUrl()) {
+    return {
+      posts: [],
+      categories: [],
+      tags: [],
+      postCategories: [],
+      postTags: [],
+      categoryById: new Map<number, { id: number; slug: string; name: string }>(),
+      tagById: new Map<number, { id: number; slug: string; name: string }>(),
+      names: new Map<number, string>(),
+    };
+  }
   const db = getDb();
   const [posts, categories, tags, postCategories, postTags, users] = await Promise.all([
-    db.orm.public.Post.orderBy((post) => post.updatedAt.desc()).all(),
-    db.orm.public.Category.orderBy((category) => category.name.asc()).all(),
-    db.orm.public.Tag.orderBy((tag) => tag.name.asc()).all(),
-    db.orm.public.PostCategory.all(),
-    db.orm.public.PostTag.all(),
-    db.orm.public.User.select("id", "name").all(),
+    db.post.findMany({ orderBy: { updatedAt: "desc" } }),
+    db.category.findMany({ orderBy: { name: "asc" } }),
+    db.tag.findMany({ orderBy: { name: "asc" } }),
+    db.postCategory.findMany(),
+    db.postTag.findMany(),
+    db.user.findMany({ select: { id: true, name: true } }),
   ]);
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const tagById = new Map(tags.map((tag) => [tag.id, tag]));
@@ -147,8 +160,8 @@ function card(
     excerpt: post.excerpt?.trim() || excerptFromHtml(editorHtml(post.body)),
     featuredImageUrl: post.featuredImageUrl,
     featuredImageAlt: post.featuredImageAlt,
-    publishedAt: iso(post.publishedAt),
-    updatedAt: iso(post.updatedAt) ?? "",
+    publishedAt: toIso(post.publishedAt),
+    updatedAt: toIso(post.updatedAt) ?? "",
     categories,
     tags,
   };
@@ -170,14 +183,16 @@ export async function listPublishedPosts() {
 }
 
 export async function getPublicPost(slug: string): Promise<PublicPost | null> {
+  if (!isMysqlDatabaseUrl()) return null;
   const db = getDb();
-  const post = await db.orm.public.Post.where({ slug }).first();
+  const post = await db.post.findFirst({ where: { slug } });
   if (!post || post.status !== "published") return null;
   const data = await graph();
   const current = data.posts.find((item) => item.id === post.id) ?? post;
-  const comments = await db.orm.public.Comment.where({ postId: post.id, status: "approved" })
-    .orderBy((comment) => comment.createdAt.asc())
-    .all();
+  const comments = await db.comment.findMany({
+    where: { postId: post.id, status: "approved" },
+    orderBy: { createdAt: "asc" },
+  });
   const summary = card(
     current,
     termsFor(post.id, data.postCategories, data.categoryById, "categoryId"),
@@ -196,7 +211,7 @@ export async function getPublicPost(slug: string): Promise<PublicPost | null> {
       parentId: comment.parentId,
       authorName: comment.authorName,
       body: comment.body,
-      createdAt: String(comment.createdAt),
+      createdAt: comment.createdAt.toISOString(),
       isStaff: comment.isStaff,
     })),
   };
@@ -256,7 +271,7 @@ export async function listAdminPosts() {
     slug: post.slug,
     title: post.title,
     status: post.status === "published" ? "published" : "draft",
-    updatedAt: String(post.updatedAt),
+    updatedAt: toIso(post.updatedAt) ?? "",
     categories: termsFor(post.id, data.postCategories, data.categoryById, "categoryId").map((item) => item.name),
   }));
 }
@@ -281,15 +296,15 @@ export async function getAdminPost(id: number): Promise<AdminPost | null> {
     ogImageUrl: post.ogImageUrl ?? "",
     categoryIds: termsFor(post.id, data.postCategories, data.categoryById, "categoryId").map((item) => item.id),
     tagNames: termsFor(post.id, data.postTags, data.tagById, "tagId").map((item) => item.name),
-    publishedAt: iso(post.publishedAt),
-    updatedAt: String(post.updatedAt),
+    publishedAt: toIso(post.publishedAt),
+    updatedAt: toIso(post.updatedAt) ?? "",
   };
 }
 
 export async function listCategories() {
   await requireAdmin();
   const db = getDb();
-  const rows = await db.orm.public.Category.orderBy((category) => category.name.asc()).all();
+  const rows = await db.category.findMany({ orderBy: { name: "asc" } });
   return rows.map((row) => ({
     id: row.id,
     slug: row.slug,
@@ -302,7 +317,7 @@ export async function listCategories() {
 export async function listTags() {
   await requireAdmin();
   const db = getDb();
-  const rows = await db.orm.public.Tag.orderBy((tag) => tag.name.asc()).all();
+  const rows = await db.tag.findMany({ orderBy: { name: "asc" } });
   return rows.map((row) => ({ id: row.id, slug: row.slug, name: row.name })) satisfies TagView[];
 }
 
@@ -310,8 +325,8 @@ export async function listAdminComments(status: string) {
   await requireAdmin();
   const db = getDb();
   const [comments, posts] = await Promise.all([
-    db.orm.public.Comment.orderBy((comment) => comment.createdAt.desc()).all(),
-    db.orm.public.Post.select("id", "title", "slug").all(),
+    db.comment.findMany({ orderBy: { createdAt: "desc" } }),
+    db.post.findMany({ select: { id: true, title: true, slug: true } }),
   ]);
   const postById = new Map(posts.map((post) => [post.id, post]));
   return comments
@@ -330,7 +345,7 @@ export async function listAdminComments(status: string) {
         body: comment.body,
         status: comment.status,
         isStaff: comment.isStaff,
-        createdAt: String(comment.createdAt),
+        createdAt: comment.createdAt.toISOString(),
       } satisfies AdminComment;
     });
 }

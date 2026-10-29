@@ -15,7 +15,8 @@ export const instant = false;
 
 export async function generateStaticParams() {
   const posts = await listPublishedPosts();
-  return posts.map((post) => ({ slug: post.slug }));
+  if (posts.length > 0) return posts.map((post) => ({ slug: post.slug }));
+  return [{ slug: "what-a-cash-offer-actually-covers" }];
 }
 
 type PostParams = { params: Promise<{ slug: string }> };

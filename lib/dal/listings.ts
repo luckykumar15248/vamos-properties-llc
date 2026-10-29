@@ -1,5 +1,6 @@
 import "server-only";
 
+import { isMysqlDatabaseUrl } from "@/lib/db/mysql-url";
 import { getDb } from "@/src/prisma/db";
 import { requireAdmin } from "@/lib/admin/auth";
 import type { ListingStatus } from "@/lib/admin/pipeline";
@@ -89,7 +90,7 @@ type ListingRow = {
   price: string | null;
   listPrice: number | null;
   previousPrice: number | null;
-  priceChangedAt: string | null;
+  priceChangedAt: Date | string | null;
   monthlyPayment: number | null;
   terms: string | null;
   status: string;
@@ -105,9 +106,9 @@ type ListingRow = {
   metaDescription: string | null;
   keywords: string | null;
   localTags: string | null;
-  publishedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  publishedAt: Date | string | null;
+  createdAt: Date | string;
+  updatedAt: Date | string;
 };
 
 function slugify(value: string) {
@@ -135,6 +136,15 @@ function lineList(value: string | null) {
     .filter(Boolean);
 }
 
+function toIso(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  return d instanceof Date ? d.toISOString() : d;
+}
+
+function toIsoRequired(d: Date | string): string {
+  return d instanceof Date ? d.toISOString() : d;
+}
+
 function toView(row: ListingRow, prices: PricePoint[], now: number): ListingView {
   return {
     id: row.id,
@@ -149,7 +159,7 @@ function toView(row: ListingRow, prices: PricePoint[], now: number): ListingView
     price: row.listPrice != null ? formatMoney(row.listPrice) : row.price,
     listPrice: row.listPrice,
     previousPrice: row.previousPrice,
-    priceChangedAt: row.priceChangedAt ? String(row.priceChangedAt) : null,
+    priceChangedAt: toIso(row.priceChangedAt),
     drop: dropAmount(row.previousPrice, row.listPrice),
     monthlyPayment: row.monthlyPayment,
     terms: row.terms,
@@ -166,42 +176,33 @@ function toView(row: ListingRow, prices: PricePoint[], now: number): ListingView
     metaDescription: row.metaDescription,
     keywords: row.keywords,
     localTags: row.localTags,
-    publishedAt: row.publishedAt ? String(row.publishedAt) : null,
-    createdAt: String(row.createdAt),
-    updatedAt: String(row.updatedAt),
+    publishedAt: toIso(row.publishedAt),
+    createdAt: toIsoRequired(row.createdAt),
+    updatedAt: toIsoRequired(row.updatedAt),
     prices,
-    isNew: isFreshListing(row.publishedAt ? String(row.publishedAt) : null, now),
-  };
-}
-
-function asRow(row: ListingRow): ListingRow {
-  return {
-    ...row,
-    priceChangedAt: row.priceChangedAt ? String(row.priceChangedAt) : null,
-    publishedAt: row.publishedAt ? String(row.publishedAt) : null,
-    createdAt: String(row.createdAt),
-    updatedAt: String(row.updatedAt),
+    isNew: isFreshListing(toIso(row.publishedAt), now),
   };
 }
 
 async function uniqueSlug(title: string, address: string, city: string, currentId?: number) {
   const db = getDb();
   const base = slugify(`${address} ${city || title}`);
-  const taken = await db.orm.public.Listing.where({ slug: base }).select("id").first();
+  const taken = await db.listing.findFirst({ where: { slug: base }, select: { id: true } });
   if (!taken || taken.id === currentId) return base;
   return `${base}-${currentId ?? Date.now().toString(36)}`;
 }
 
 async function pricesFor(listingId: number): Promise<PricePoint[]> {
   const db = getDb();
-  const rows = await db.orm.public.ListingPrice.where({ listingId })
-    .orderBy((price) => price.recordedAt.desc())
-    .all();
+  const rows = await db.listingPrice.findMany({
+    where: { listingId },
+    orderBy: { recordedAt: "desc" },
+  });
   return rows.map((row) => ({
     id: row.id,
     amount: row.amount,
     previousAmount: row.previousAmount,
-    recordedAt: String(row.recordedAt),
+    recordedAt: row.recordedAt.toISOString(),
   }));
 }
 
@@ -209,17 +210,17 @@ export async function listListings() {
   await requireAdmin();
   const db = getDb();
   const now = Date.now();
-  const rows = await db.orm.public.Listing.orderBy((listing) => listing.updatedAt.desc()).all();
-  return rows.map((row) => toView(asRow(row), [], now));
+  const rows = await db.listing.findMany({ orderBy: { updatedAt: "desc" } });
+  return rows.map((row) => toView(row, [], now));
 }
 
 export async function getListing(id: number) {
   await requireAdmin();
   const db = getDb();
-  const row = await db.orm.public.Listing.where({ id }).first();
+  const row = await db.listing.findFirst({ where: { id } });
   if (!row) return null;
   const prices = await pricesFor(id);
-  return toView(asRow(row), prices, Date.now());
+  return toView(row, prices, Date.now());
 }
 
 function listingData(
@@ -239,7 +240,7 @@ function listingData(
     price: input.listPrice != null ? formatMoney(input.listPrice) : null,
     listPrice: input.listPrice,
     previousPrice,
-    priceChangedAt,
+    priceChangedAt: priceChangedAt ? new Date(priceChangedAt) : null,
     monthlyPayment: input.monthlyPayment,
     terms: input.terms || null,
     status: input.status,
@@ -255,7 +256,7 @@ function listingData(
     metaDescription: input.metaDescription || null,
     keywords: input.keywords || null,
     localTags: input.localTags || null,
-    publishedAt,
+    publishedAt: publishedAt ? new Date(publishedAt) : null,
   };
 }
 
@@ -264,53 +265,64 @@ export async function saveListing(id: number | null, input: ListingInput) {
   const db = getDb();
   const nowIso = new Date().toISOString();
 
-  return db.transaction(async (tx) => {
-    if (id) {
-      const current = await tx.orm.public.Listing.where({ id })
-        .select("id", "slug", "listPrice", "previousPrice", "priceChangedAt", "publishedAt")
-        .first();
-      if (!current) return { ok: false as const, message: "That listing is not in the inventory." };
+  return db.$transaction(
+    async (tx) => {
+      if (id) {
+        const current = await tx.listing.findFirst({
+          where: { id },
+          select: { id: true, slug: true, listPrice: true, previousPrice: true, priceChangedAt: true, publishedAt: true },
+        });
+        if (!current) return { ok: false as const, message: "That listing is not in the inventory." };
 
-      const priceChanged = input.listPrice != null && input.listPrice !== current.listPrice;
-      const publishedAt = current.publishedAt
-        ? String(current.publishedAt)
-        : isPublicStatus(input.status)
-          ? nowIso
-          : null;
+        const priceChanged = input.listPrice != null && input.listPrice !== current.listPrice;
+        const publishedAt = current.publishedAt
+          ? current.publishedAt.toISOString()
+          : isPublicStatus(input.status)
+            ? nowIso
+            : null;
 
-      await tx.orm.public.Listing.where({ id }).update(
-        listingData(
-          input,
-          publishedAt,
-          priceChanged ? current.listPrice : current.previousPrice,
-          priceChanged ? nowIso : current.priceChangedAt ? String(current.priceChangedAt) : null,
-        ),
-      );
+        await tx.listing.update({
+          where: { id },
+          data: listingData(
+            input,
+            publishedAt,
+            priceChanged ? current.listPrice : current.previousPrice,
+            priceChanged ? nowIso : toIso(current.priceChangedAt),
+          ),
+        });
 
-      if (priceChanged && input.listPrice != null) {
-        await tx.orm.public.ListingPrice.create({
-          listingId: id,
-          amount: input.listPrice,
-          previousAmount: current.listPrice,
+        if (priceChanged && input.listPrice != null) {
+          await tx.listingPrice.create({
+            data: {
+              listingId: id,
+              amount: input.listPrice,
+              previousAmount: current.listPrice,
+            },
+          });
+        }
+        return { ok: true as const, id, slug: current.slug, message: priceChanged ? "Price updated." : "Listing saved." };
+      }
+
+      const slug = await uniqueSlug(input.title, input.address, input.city);
+      const created = await tx.listing.create({
+        data: {
+          ...listingData(input, isPublicStatus(input.status) ? nowIso : null, null, null),
+          slug,
+        },
+      });
+      if (input.listPrice != null) {
+        await tx.listingPrice.create({
+          data: {
+            listingId: created.id,
+            amount: input.listPrice,
+            previousAmount: null,
+          },
         });
       }
-      return { ok: true as const, id, slug: current.slug, message: priceChanged ? "Price updated." : "Listing saved." };
-    }
-
-    const slug = await uniqueSlug(input.title, input.address, input.city);
-    const created = await tx.orm.public.Listing.create({
-      ...listingData(input, isPublicStatus(input.status) ? nowIso : null, null, null),
-      slug,
-    });
-    if (input.listPrice != null) {
-      await tx.orm.public.ListingPrice.create({
-        listingId: created.id,
-        amount: input.listPrice,
-        previousAmount: null,
-      });
-    }
-    return { ok: true as const, id: created.id, slug, message: "Listing saved." };
-  });
+      return { ok: true as const, id: created.id, slug, message: "Listing saved." };
+    },
+    { timeout: 30_000 },
+  );
 }
 
 export type PublicQuery = {
@@ -323,10 +335,11 @@ export type PublicQuery = {
 };
 
 export async function listPublicListings(query: PublicQuery, now: number) {
+  if (!isMysqlDatabaseUrl()) return { listings: [], cities: [] as string[] };
   const db = getDb();
-  const rows = await db.orm.public.Listing.orderBy((listing) => listing.updatedAt.desc()).all();
+  const rows = await db.listing.findMany({ orderBy: { updatedAt: "desc" } });
   const listings = rows
-    .map((row) => toView(asRow(row), [], now))
+    .map((row) => toView(row, [], now))
     .filter((listing) => isPublicStatus(listing.status))
     .filter((listing) => (query.status && isPublicStatus(query.status) ? listing.status === query.status : true))
     .filter((listing) => (query.city ? listing.city?.toLowerCase() === query.city.toLowerCase() : true))
@@ -347,17 +360,21 @@ export async function listPublicListings(query: PublicQuery, now: number) {
 }
 
 export async function getPublicListing(slug: string, now: number) {
+  if (!isMysqlDatabaseUrl()) return null;
   const db = getDb();
-  const row = await db.orm.public.Listing.where({ slug }).first();
+  const row = await db.listing.findFirst({ where: { slug } });
   if (!row || !isPublicStatus(row.status)) return null;
   const prices = await pricesFor(row.id);
-  return toView(asRow(row), prices, now);
+  return toView(row, prices, now);
 }
 
 export async function listPublicSlugs() {
+  if (!isMysqlDatabaseUrl()) return [];
   const db = getDb();
-  const rows = await db.orm.public.Listing.select("slug", "updatedAt", "status").all();
+  const rows = await db.listing.findMany({
+    select: { slug: true, updatedAt: true, status: true },
+  });
   return rows
     .filter((row) => isPublicStatus(row.status))
-    .map((row) => ({ slug: row.slug, updatedAt: String(row.updatedAt) }));
+    .map((row) => ({ slug: row.slug, updatedAt: row.updatedAt.toISOString() }));
 }

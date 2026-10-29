@@ -1,26 +1,18 @@
+import "server-only";
 import "dotenv/config";
-import postgres from "@prisma/orm-postgres/runtime";
-import type { Contract } from "./contract.d";
-import contractJson from "./contract.json" with { type: "json" };
+import { PrismaClient } from "@prisma/client";
+import { runtimeDatabaseUrl } from "@/lib/db/mysql-url";
 
-type Database = ReturnType<typeof postgres<Contract>>;
+const globalForPrisma = globalThis as unknown as {
+  _prisma: PrismaClient | undefined;
+};
 
-let database: Database | undefined;
-
-export function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) {
-    throw new Error("DATABASE_URL is not set");
-  }
-  if (!database) {
-    database = postgres<Contract>({
-      contractJson,
-      url,
-      poolOptions: {
-        idleTimeoutMillis: 10_000,
-        connectionTimeoutMillis: 5_000,
-      },
+export function getDb(): PrismaClient {
+  if (!globalForPrisma._prisma) {
+    globalForPrisma._prisma = new PrismaClient({
+      log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+      datasources: { db: { url: runtimeDatabaseUrl(process.env.DATABASE_URL) } },
     });
   }
-  return database;
+  return globalForPrisma._prisma;
 }

@@ -85,6 +85,11 @@ export type LeadDetail = {
 
 type EventStamp = { type: string; author: string; createdAt: string };
 
+function toIso(d: Date | string | null | undefined): string | null {
+  if (!d) return null;
+  return d instanceof Date ? d.toISOString() : d;
+}
+
 function queueFromRow(
   lead: {
     id: number;
@@ -123,31 +128,46 @@ function queueFromRow(
 export async function listStaff() {
   await requireAdmin();
   const db = getDb();
-  const users = await db.orm.public.User.select("id", "name").orderBy((user) => user.name.asc()).all();
+  const users = await db.user.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
   return users.map((user) => ({ id: user.id, name: user.name }));
 }
 
 export async function listLeadQueue(status: string | null): Promise<{ actor: AdminActor; leads: QueueLead[] }> {
   const actor = await requireAdmin();
   const db = getDb();
-  const rows = await db.orm.public.Lead.select(
-    "id",
-    "address",
-    "name",
-    "phone",
-    "situation",
-    "preferredPath",
-    "language",
-    "trusteeSaleDate",
-    "status",
-    "createdAt",
-  )
-    .include("events", (events) => events.select("type", "author", "createdAt"))
-    .all();
+  const rows = await db.lead.findMany({
+    select: {
+      id: true,
+      address: true,
+      name: true,
+      phone: true,
+      situation: true,
+      preferredPath: true,
+      language: true,
+      trusteeSaleDate: true,
+      status: true,
+      createdAt: true,
+      events: {
+        select: { type: true, author: true, createdAt: true },
+      },
+    },
+  });
 
   const now = Date.now();
   const leads = rows
-    .map((lead) => queueFromRow(lead, now))
+    .map((lead) =>
+      queueFromRow(
+        {
+          ...lead,
+          createdAt: lead.createdAt.toISOString(),
+          events: lead.events.map((e) => ({ ...e, createdAt: e.createdAt.toISOString() })),
+        },
+        now,
+      ),
+    )
     .filter((lead) => (status ? lead.status === status : true))
     .sort((left, right) => {
       if (left.urgent !== right.urgent) return left.urgent ? -1 : 1;
@@ -163,25 +183,34 @@ export async function listLeadQueue(status: string | null): Promise<{ actor: Adm
 export async function getLeadDetail(id: number): Promise<{ actor: AdminActor; lead: LeadDetail | null }> {
   const actor = await requireAdmin();
   const db = getDb();
-  const row = await db.orm.public.Lead.where({ id })
-    .include("consents", (consents) =>
-      consents.select("id", "channel", "textVersion", "pageUrl", "grantedAt").orderBy((consent) => consent.grantedAt.asc()),
-    )
-    .include("events", (events) =>
-      events.select("id", "author", "type", "body", "createdAt").orderBy((event) => event.createdAt.desc()),
-    )
-    .include("assignedTo", (user) => user.select("id", "name"))
-    .first();
+  const row = await db.lead.findFirst({
+    where: { id },
+    include: {
+      consents: {
+        select: { id: true, channel: true, textVersion: true, pageUrl: true, grantedAt: true },
+        orderBy: { grantedAt: "asc" },
+      },
+      events: {
+        select: { id: true, author: true, type: true, body: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+      },
+      assignedTo: {
+        select: { id: true, name: true },
+      },
+    },
+  });
 
   if (!row) return { actor, lead: null };
 
   const days = daysUntilSale(row.trusteeSaleDate);
-  const events = row.events.map((event) => ({
+  const createdAtIso = row.createdAt.toISOString();
+  const updatedAtIso = row.updatedAt.toISOString();
+  const events: LeadEventView[] = row.events.map((event) => ({
     id: event.id,
     author: event.author,
     type: event.type,
     body: event.body,
-    createdAt: String(event.createdAt),
+    createdAt: event.createdAt.toISOString(),
   }));
 
   return {
@@ -207,18 +236,18 @@ export async function getLeadDetail(id: number): Promise<{ actor: AdminActor; le
       utmCampaign: row.utmCampaign,
       assignedToId: row.assignedTo?.id ?? null,
       assignedToName: row.assignedTo?.name ?? null,
-      createdAt: String(row.createdAt),
-      updatedAt: String(row.updatedAt),
-      minutesSinceSubmit: minutesSince(String(row.createdAt)),
+      createdAt: createdAtIso,
+      updatedAt: updatedAtIso,
+      minutesSinceSubmit: minutesSince(createdAtIso),
       daysUntilSale: days,
       urgent: saleIsUrgent(days),
-      reply: replyMark(String(row.createdAt), canonicalStatus(row.status), events),
+      reply: replyMark(createdAtIso, canonicalStatus(row.status), events),
       consents: row.consents.map((consent) => ({
         id: consent.id,
         channel: consent.channel,
         textVersion: consent.textVersion,
         pageUrl: consent.pageUrl,
-        grantedAt: String(consent.grantedAt),
+        grantedAt: consent.grantedAt.toISOString(),
       })),
       events,
     },
@@ -236,24 +265,29 @@ export async function changeLeadStatus(leadId: number, status: LeadStatus, lostR
   }
 
   const db = getDb();
-  const result = await db.transaction(async (tx) => {
-    const current = await tx.orm.public.Lead.where({ id: leadId }).select("id", "status", "lostReason").first();
+  const result = await db.$transaction(async (tx) => {
+    const current = await tx.lead.findFirst({
+      where: { id: leadId },
+      select: { id: true, status: true, lostReason: true },
+    });
     if (!current) return { ok: false as const, message: "That lead is not in the queue." };
     const nextReason = status === "lost" ? reason : null;
     if (current.status === status && (current.lostReason ?? null) === nextReason) {
       return { ok: true as const, message: `Already ${statusLabel(status)}.` };
     }
-    await tx.orm.public.Lead.where({ id: leadId }).update({
-      status,
-      lostReason: nextReason,
+    await tx.lead.update({
+      where: { id: leadId },
+      data: { status, lostReason: nextReason },
     });
     const reasonText = nextReason ? ` Reason: ${lostReasonLabel(nextReason)}.` : "";
-    await tx.orm.public.LeadEvent.create({
-      leadId,
-      author: actor.name,
-      authorId: actor.id,
-      type: "status",
-      body: `Status set to ${statusLabel(status)}.${reasonText}`,
+    await tx.leadEvent.create({
+      data: {
+        leadId,
+        author: actor.name,
+        authorId: actor.id,
+        type: "status",
+        body: `Status set to ${statusLabel(status)}.${reasonText}`,
+      },
     });
     return { ok: true as const, message: `Status saved as ${statusLabel(status)}.` };
   });
@@ -264,15 +298,17 @@ export async function changeLeadStatus(leadId: number, status: LeadStatus, lostR
 export async function addLeadNote(leadId: number, body: string) {
   const actor = await requireAdmin();
   const db = getDb();
-  const saved = await db.transaction(async (tx) => {
-    const current = await tx.orm.public.Lead.where({ id: leadId }).select("id").first();
+  const saved = await db.$transaction(async (tx) => {
+    const current = await tx.lead.findFirst({ where: { id: leadId }, select: { id: true } });
     if (!current) return { ok: false as const, message: "That lead is not in the queue." };
-    await tx.orm.public.LeadEvent.create({
-      leadId,
-      author: actor.name,
-      authorId: actor.id,
-      type: "note",
-      body,
+    await tx.leadEvent.create({
+      data: {
+        leadId,
+        author: actor.name,
+        authorId: actor.id,
+        type: "note",
+        body,
+      },
     });
     return { ok: true as const, message: "Note saved." };
   });
@@ -282,13 +318,19 @@ export async function addLeadNote(leadId: number, body: string) {
 export async function assignLead(leadId: number, assignedToId: number | null) {
   const actor = await requireAdmin();
   const db = getDb();
-  return db.transaction(async (tx) => {
-    const current = await tx.orm.public.Lead.where({ id: leadId }).select("id", "assignedToId").first();
+  return db.$transaction(async (tx) => {
+    const current = await tx.lead.findFirst({
+      where: { id: leadId },
+      select: { id: true, assignedToId: true },
+    });
     if (!current) return { ok: false as const, message: "That lead is not in the queue." };
 
     let assigneeName: string | null = null;
     if (assignedToId !== null) {
-      const assignee = await tx.orm.public.User.where({ id: assignedToId }).select("id", "name").first();
+      const assignee = await tx.user.findFirst({
+        where: { id: assignedToId },
+        select: { id: true, name: true },
+      });
       if (!assignee) return { ok: false as const, message: "That person is not on the team." };
       assigneeName = assignee.name;
     }
@@ -297,13 +339,15 @@ export async function assignLead(leadId: number, assignedToId: number | null) {
       return { ok: true as const, message: assigneeName ? `Already with ${assigneeName}.` : "Already unassigned." };
     }
 
-    await tx.orm.public.Lead.where({ id: leadId }).update({ assignedToId });
-    await tx.orm.public.LeadEvent.create({
-      leadId,
-      author: actor.name,
-      authorId: actor.id,
-      type: "note",
-      body: assigneeName ? `Assigned to ${assigneeName}.` : "Assignment cleared.",
+    await tx.lead.update({ where: { id: leadId }, data: { assignedToId } });
+    await tx.leadEvent.create({
+      data: {
+        leadId,
+        author: actor.name,
+        authorId: actor.id,
+        type: "note",
+        body: assigneeName ? `Assigned to ${assigneeName}.` : "Assignment cleared.",
+      },
     });
     return {
       ok: true as const,
@@ -318,29 +362,36 @@ export async function logLeadTouch(
 ) {
   const actor = await requireAdmin();
   const db = getDb();
-  return db.transaction(async (tx) => {
-    const current = await tx.orm.public.Lead.where({ id: leadId }).select("id", "email", "address", "name").first();
+  return db.$transaction(async (tx) => {
+    const current = await tx.lead.findFirst({
+      where: { id: leadId },
+      select: { id: true, email: true, address: true, name: true },
+    });
     if (!current) return { ok: false as const, message: "That lead is not in the queue." };
 
     if (input.channel === "call") {
-      await tx.orm.public.LeadEvent.create({
-        leadId,
-        author: actor.name,
-        authorId: actor.id,
-        type: "call",
-        body: input.body,
+      await tx.leadEvent.create({
+        data: {
+          leadId,
+          author: actor.name,
+          authorId: actor.id,
+          type: "call",
+          body: input.body,
+        },
       });
       return { ok: true as const, kind: "log" as const, message: "Call logged." };
     }
 
     if (input.channel === "sms") {
       const direction = input.direction === "in" ? "Incoming text" : "Outgoing text";
-      await tx.orm.public.LeadEvent.create({
-        leadId,
-        author: actor.name,
-        authorId: actor.id,
-        type: "sms_out",
-        body: `${direction}. ${input.body}`,
+      await tx.leadEvent.create({
+        data: {
+          leadId,
+          author: actor.name,
+          authorId: actor.id,
+          type: "sms_out",
+          body: `${direction}. ${input.body}`,
+        },
       });
       return { ok: true as const, kind: "log" as const, message: "Text logged." };
     }
@@ -361,12 +412,14 @@ export async function logLeadTouch(
 export async function recordEmailEvent(leadId: number, body: string, sent: boolean) {
   const actor = await requireAdmin();
   const db = getDb();
-  await db.orm.public.LeadEvent.create({
-    leadId,
-    author: actor.name,
-    authorId: actor.id,
-    type: sent ? "email_out" : "email_status",
-    body,
+  await db.leadEvent.create({
+    data: {
+      leadId,
+      author: actor.name,
+      authorId: actor.id,
+      type: sent ? "email_out" : "email_status",
+      body,
+    },
   });
 }
 
@@ -385,20 +438,21 @@ export async function searchBank(query: string): Promise<{ actor: AdminActor; le
   const actor = await requireAdmin();
   const db = getDb();
   const needle = query.trim().toLowerCase();
-  const rows = await db.orm.public.Lead.select(
-    "id",
-    "address",
-    "name",
-    "phone",
-    "email",
-    "status",
-    "situation",
-    "message",
-    "city",
-    "createdAt",
-  )
-    .orderBy((lead) => lead.createdAt.desc())
-    .all();
+  const rows = await db.lead.findMany({
+    select: {
+      id: true,
+      address: true,
+      name: true,
+      phone: true,
+      email: true,
+      status: true,
+      situation: true,
+      message: true,
+      city: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
 
   const leads = rows
     .filter((lead) => {
@@ -417,7 +471,7 @@ export async function searchBank(query: string): Promise<{ actor: AdminActor; le
       email: lead.email,
       status: canonicalStatus(lead.status),
       situation: lead.situation,
-      createdAt: String(lead.createdAt),
+      createdAt: lead.createdAt.toISOString(),
     }));
 
   return { actor, leads };
@@ -426,16 +480,17 @@ export async function searchBank(query: string): Promise<{ actor: AdminActor; le
 export async function recentActivity() {
   await requireAdmin();
   const db = getDb();
-  const events = await db.orm.public.LeadEvent.select("id", "leadId", "type", "author", "body", "createdAt")
-    .orderBy((event) => event.createdAt.desc())
-    .limit(8)
-    .all();
+  const events = await db.leadEvent.findMany({
+    select: { id: true, leadId: true, type: true, author: true, body: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+    take: 8,
+  });
   return events.map((event) => ({
     id: event.id,
     leadId: event.leadId,
     type: event.type,
     author: event.author,
     body: event.body,
-    createdAt: String(event.createdAt),
+    createdAt: event.createdAt.toISOString(),
   }));
 }

@@ -12,8 +12,8 @@ function emptyToNull(value: string | undefined) {
   return trimmed ? trimmed : null;
 }
 
-function isSamePhoenixDay(createdAt: string) {
-  const created = new Date(createdAt);
+function isSamePhoenixDay(createdAt: Date | string) {
+  const created = new Date(createdAt instanceof Date ? createdAt.toISOString() : createdAt);
   if (Number.isNaN(created.getTime())) return false;
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Phoenix",
@@ -35,75 +35,89 @@ export async function saveLead(input: NewLead) {
   const utmMedium = emptyToNull(input.utmMedium);
   const utmCampaign = emptyToNull(input.utmCampaign);
 
-  return db.transaction(async (tx) => {
-    const existing = await tx.orm.public.Lead.where({ phone, address })
-      .orderBy((lead) => lead.createdAt.desc())
-      .first();
+  return db.$transaction(async (tx) => {
+    const existing = await tx.lead.findFirst({
+      where: { phone, address },
+      orderBy: { createdAt: "desc" },
+    });
 
     if (
       existing &&
       existing.status !== "closed" &&
       existing.status !== "lost" &&
-      isSamePhoenixDay(String(existing.createdAt))
+      isSamePhoenixDay(existing.createdAt)
     ) {
-      await tx.orm.public.Lead.where({ id: existing.id }).update({
+      await tx.lead.update({
+        where: { id: existing.id },
+        data: {
+          name: input.name.trim(),
+          email,
+          message,
+          situation: input.situation,
+          trusteeSaleDate,
+          preferredPath: input.preferredPath,
+          language: input.language,
+          sourcePath: input.sourcePath,
+          utmSource,
+          utmMedium,
+          utmCampaign,
+        },
+      });
+      await tx.leadEvent.create({
+        data: {
+          leadId: existing.id,
+          author: "system",
+          type: "note",
+          body: "Same-day form submitted again.",
+        },
+      });
+      return { id: existing.id };
+    }
+
+    const lead = await tx.lead.create({
+      data: {
+        address,
         name: input.name.trim(),
+        phone,
         email,
         message,
         situation: input.situation,
         trusteeSaleDate,
         preferredPath: input.preferredPath,
         language: input.language,
+        status: "new",
         sourcePath: input.sourcePath,
         utmSource,
         utmMedium,
         utmCampaign,
-      });
-      await tx.orm.public.LeadEvent.create({
-        leadId: existing.id,
+      },
+    });
+
+    await tx.consent.create({
+      data: {
+        leadId: lead.id,
+        channel: "sms",
+        textVersion: input.consentText,
+        pageUrl: input.pageUrl,
+        ipHash: input.ipHash,
+      },
+    });
+    await tx.consent.create({
+      data: {
+        leadId: lead.id,
+        channel: "call",
+        textVersion: input.consentText,
+        pageUrl: input.pageUrl,
+        ipHash: input.ipHash,
+      },
+    });
+    await tx.leadEvent.create({
+      data: {
+        leadId: lead.id,
         author: "system",
-        type: "note",
-        body: "Same-day form submitted again.",
-      });
-      return { id: existing.id };
-    }
-
-    const lead = await tx.orm.public.Lead.create({
-      address,
-      name: input.name.trim(),
-      phone,
-      email,
-      message,
-      situation: input.situation,
-      trusteeSaleDate,
-      preferredPath: input.preferredPath,
-      language: input.language,
-      status: "new",
-      sourcePath: input.sourcePath,
-      utmSource,
-      utmMedium,
-      utmCampaign,
-    });
-
-    await tx.orm.public.Consent.create({
-      leadId: lead.id,
-      channel: "sms",
-      textVersion: input.consentText,
-      pageUrl: input.pageUrl,
-      ipHash: input.ipHash,
-    });
-    await tx.orm.public.Consent.create({
-      leadId: lead.id,
-      channel: "call",
-      textVersion: input.consentText,
-      pageUrl: input.pageUrl,
-      ipHash: input.ipHash,
-    });
-    await tx.orm.public.LeadEvent.create({
-      leadId: lead.id,
-      author: "system",
-      type: "created",
-      body: "Lead arrived from the website.",
+        type: "created",
+        body: "Lead arrived from the website.",
+      },
     });
 
     return { id: lead.id };
@@ -112,10 +126,12 @@ export async function saveLead(input: NewLead) {
 
 export async function recordLeadEvent(leadId: number, type: string, body: string) {
   const db = getDb();
-  await db.orm.public.LeadEvent.create({
-    leadId,
-    author: "system",
-    type,
-    body,
+  await db.leadEvent.create({
+    data: {
+      leadId,
+      author: "system",
+      type,
+      body,
+    },
   });
 }

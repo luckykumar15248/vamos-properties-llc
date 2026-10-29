@@ -33,7 +33,7 @@ function toView(row: {
   sizeBytes: number;
   folder: string | null;
   alt: string | null;
-  createdAt: string | Date;
+  createdAt: Date | string;
 }): MediaAssetView | null {
   if (!isMediaKind(row.kind)) return null;
   return {
@@ -46,17 +46,17 @@ function toView(row: {
     sizeBytes: row.sizeBytes,
     folder: row.folder,
     alt: row.alt,
-    createdAt: String(row.createdAt),
+    createdAt: row.createdAt instanceof Date ? row.createdAt.toISOString() : String(row.createdAt),
   };
 }
 
 export async function listMedia(query: MediaQuery) {
   await requireAdmin();
   const db = getDb();
-  const rows = await db.orm.public.MediaAsset.orderBy((asset) => asset.createdAt.desc()).all();
+  const rows = await db.mediaAsset.findMany({ orderBy: { createdAt: "desc" } });
   const needle = query.q.trim().toLowerCase();
   return rows
-    .map((row) => toView({ ...row, createdAt: String(row.createdAt) }))
+    .map((row) => toView(row))
     .filter((asset): asset is MediaAssetView => asset !== null)
     .filter((asset) => (query.kind ? asset.kind === query.kind : true))
     .filter((asset) => (query.folder ? asset.folder === query.folder : true))
@@ -69,9 +69,9 @@ export async function listMedia(query: MediaQuery) {
 
 export async function findMediaByKey(key: string) {
   const db = getDb();
-  const row = await db.orm.public.MediaAsset.where({ key }).first();
+  const row = await db.mediaAsset.findFirst({ where: { key } });
   if (!row) return null;
-  return toView({ ...row, createdAt: String(row.createdAt) });
+  return toView(row);
 }
 
 export async function createMediaAsset(input: {
@@ -86,30 +86,32 @@ export async function createMediaAsset(input: {
 }) {
   await requireAdmin();
   const db = getDb();
-  const created = await db.orm.public.MediaAsset.create({
-    key: input.key,
-    url: input.url,
-    fileName: input.fileName,
-    contentType: input.contentType,
-    kind: input.kind,
-    sizeBytes: input.sizeBytes,
-    folder: input.folder,
-    alt: input.fileName,
-    createdById: input.createdById,
+  const created = await db.mediaAsset.create({
+    data: {
+      key: input.key,
+      url: input.url,
+      fileName: input.fileName,
+      contentType: input.contentType,
+      kind: input.kind,
+      sizeBytes: input.sizeBytes,
+      folder: input.folder,
+      alt: input.fileName,
+      createdById: input.createdById,
+    },
   });
-  return toView({ ...created, createdAt: String(created.createdAt) });
+  return toView(created);
 }
 
 export async function getMedia(id: number) {
   await requireAdmin();
   const db = getDb();
-  const current = await db.orm.public.MediaAsset.where({ id }).first();
+  const current = await db.mediaAsset.findFirst({ where: { id } });
   if (!current) return null;
-  return toView({ ...current, createdAt: String(current.createdAt) });
+  return toView(current);
 }
 
 export async function deleteMediaRecord(id: number) {
   await requireAdmin();
   const db = getDb();
-  await db.orm.public.MediaAsset.where({ id }).delete();
+  await db.mediaAsset.delete({ where: { id } });
 }
