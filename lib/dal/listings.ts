@@ -1,6 +1,5 @@
 import "server-only";
 
-import { isMysqlDatabaseUrl } from "@/lib/db/mysql-url";
 import { getDb } from "@/src/prisma/db";
 import { requireAdmin } from "@/lib/admin/auth";
 import type { ListingStatus } from "@/lib/admin/pipeline";
@@ -335,7 +334,6 @@ export type PublicQuery = {
 };
 
 export async function listPublicListings(query: PublicQuery, now: number) {
-  if (!isMysqlDatabaseUrl()) return { listings: [], cities: [] as string[] };
   const db = getDb();
   const rows = await db.listing.findMany({ orderBy: { updatedAt: "desc" } });
   const listings = rows
@@ -360,7 +358,6 @@ export async function listPublicListings(query: PublicQuery, now: number) {
 }
 
 export async function getPublicListing(slug: string, now: number) {
-  if (!isMysqlDatabaseUrl()) return null;
   const db = getDb();
   const row = await db.listing.findFirst({ where: { slug } });
   if (!row || !isPublicStatus(row.status)) return null;
@@ -369,7 +366,6 @@ export async function getPublicListing(slug: string, now: number) {
 }
 
 export async function listPublicSlugs() {
-  if (!isMysqlDatabaseUrl()) return [];
   const db = getDb();
   const rows = await db.listing.findMany({
     select: { slug: true, updatedAt: true, status: true },

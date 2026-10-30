@@ -1,6 +1,5 @@
 import "server-only";
 
-import { isMysqlDatabaseUrl } from "@/lib/db/mysql-url";
 import { getDb } from "@/src/prisma/db";
 import { requireAdmin } from "@/lib/admin/auth";
 import { editorHtml, excerptFromHtml } from "@/lib/blog/content";
@@ -106,18 +105,6 @@ function toIso(d: Date | string | null | undefined): string | null {
 }
 
 async function graph() {
-  if (!isMysqlDatabaseUrl()) {
-    return {
-      posts: [],
-      categories: [],
-      tags: [],
-      postCategories: [],
-      postTags: [],
-      categoryById: new Map<number, { id: number; slug: string; name: string }>(),
-      tagById: new Map<number, { id: number; slug: string; name: string }>(),
-      names: new Map<number, string>(),
-    };
-  }
   const db = getDb();
   const [posts, categories, tags, postCategories, postTags, users] = await Promise.all([
     db.post.findMany({ orderBy: { updatedAt: "desc" } }),
@@ -183,7 +170,6 @@ export async function listPublishedPosts() {
 }
 
 export async function getPublicPost(slug: string): Promise<PublicPost | null> {
-  if (!isMysqlDatabaseUrl()) return null;
   const db = getDb();
   const post = await db.post.findFirst({ where: { slug } });
   if (!post || post.status !== "published") return null;

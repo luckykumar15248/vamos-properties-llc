@@ -1,7 +1,7 @@
 import "server-only";
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
-import { runtimeDatabaseUrl } from "@/lib/db/mysql-url";
+import { runtimeDatabaseUrl } from "@/lib/db/database-url";
 
 const globalForPrisma = globalThis as unknown as {
   _prisma: PrismaClient | undefined;

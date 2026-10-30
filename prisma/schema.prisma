@@ -1,6 +1,5 @@
-// Prisma 5 schema for MySQL on AWS EC2.
-// Vercel serverless talks to this database through DATABASE_URL.
-// Apply: npx prisma migrate deploy   or   npx prisma db push
+// Prisma 5 schema for PostgreSQL (Vercel Postgres / local).
+// Apply: npx prisma db push
 // Generate client: npx prisma generate  (also runs on npm postinstall)
 
 generator client {
@@ -9,16 +8,16 @@ generator client {
 }
 
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 model User {
   id            Int          @id @default(autoincrement())
-  email         String       @unique @db.VarChar(191)
-  name          String       @db.VarChar(191)
-  role          String       @default("owner") @db.VarChar(32)
-  passwordHash  String       @db.VarChar(255)
+  email         String       @unique
+  name          String
+  role          String       @default("owner")
+  passwordHash  String
   assignedLeads Lead[]
   events        LeadEvent[]
   mediaAssets   MediaAsset[]
@@ -29,23 +28,23 @@ model User {
 
 model Lead {
   id              Int         @id @default(autoincrement())
-  address         String      @db.VarChar(255)
-  unit            String?     @db.VarChar(64)
-  city            String?     @db.VarChar(128)
-  name            String      @db.VarChar(191)
-  phone           String      @db.VarChar(32)
-  email           String?     @db.VarChar(191)
+  address         String
+  unit            String?
+  city            String?
+  name            String
+  phone           String
+  email           String?
   message         String?     @db.Text
-  situation       String      @db.VarChar(64)
-  trusteeSaleDate String?     @db.VarChar(32)
-  preferredPath   String      @db.VarChar(32)
-  language        String      @db.VarChar(8)
-  status          String      @default("new") @db.VarChar(32)
-  lostReason      String?     @db.VarChar(64)
-  sourcePath      String      @db.VarChar(255)
-  utmSource       String?     @db.VarChar(128)
-  utmMedium       String?     @db.VarChar(128)
-  utmCampaign     String?     @db.VarChar(128)
+  situation       String
+  trusteeSaleDate String?
+  preferredPath   String
+  language        String
+  status          String      @default("new")
+  lostReason      String?
+  sourcePath      String
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
   assignedToId    Int?
   assignedTo      User?       @relation(fields: [assignedToId], references: [id])
   consents        Consent[]
@@ -64,10 +63,10 @@ model Consent {
   id          Int      @id @default(autoincrement())
   lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   leadId      Int
-  channel     String   @db.VarChar(16)
+  channel     String
   textVersion String   @db.Text
   pageUrl     String   @db.Text
-  ipHash      String   @db.VarChar(128)
+  ipHash      String
   grantedAt   DateTime @default(now())
 
   @@index([leadId])
@@ -77,10 +76,10 @@ model LeadEvent {
   id         Int      @id @default(autoincrement())
   lead       Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
   leadId     Int
-  author     String   @default("system") @db.VarChar(64)
+  author     String   @default("system")
   authorId   Int?
   authorUser User?    @relation(fields: [authorId], references: [id])
-  type       String   @db.VarChar(32)
+  type       String
   body       String   @db.Text
   createdAt  DateTime @default(now())
 
@@ -90,30 +89,30 @@ model LeadEvent {
 
 model Listing {
   id              Int            @id @default(autoincrement())
-  title           String         @db.VarChar(191)
-  slug            String         @unique @db.VarChar(191)
-  address         String         @db.VarChar(255)
-  city            String?        @db.VarChar(128)
+  title           String
+  slug            String         @unique
+  address         String
+  city            String?
   beds            Int?
-  baths           String?        @db.VarChar(16)
+  baths           String?
   sqft            Int?
-  propertyType    String?        @db.VarChar(64)
-  price           String?        @db.VarChar(64)
+  propertyType    String?
+  price           String?
   listPrice       Int?
   previousPrice   Int?
   priceChangedAt  DateTime?
   monthlyPayment  Int?
   terms           String?        @db.Text
-  status          String         @default("draft") @db.VarChar(32)
+  status          String         @default("draft")
   featured        Boolean        @default(false)
   summary         String?        @db.Text
-  description     String?        @db.LongText
+  description     String?        @db.Text
   features        String?        @db.Text
   neighborhood    String?        @db.Text
   schools         String?        @db.Text
   yearBuilt       Int?
-  metaTitle       String?        @db.VarChar(191)
-  metaDescription String?        @db.VarChar(300)
+  metaTitle       String?
+  metaDescription String?
   keywords        String?        @db.Text
   localTags       String?        @db.Text
   photos          String?        @db.Text
@@ -141,14 +140,14 @@ model ListingPrice {
 
 model MediaAsset {
   id          Int      @id @default(autoincrement())
-  key         String   @unique @db.VarChar(191)
+  key         String   @unique
   url         String   @db.Text
-  fileName    String   @db.VarChar(255)
-  contentType String   @db.VarChar(128)
-  kind        String   @db.VarChar(32)
+  fileName    String
+  contentType String
+  kind        String
   sizeBytes   Int
-  folder      String?  @db.VarChar(128)
-  alt         String?  @db.VarChar(191)
+  folder      String?
+  alt         String?
   createdBy   User?    @relation(fields: [createdById], references: [id])
   createdById Int?
   createdAt   DateTime @default(now())
@@ -161,15 +160,15 @@ model MediaAsset {
 
 model Post {
   id               Int            @id @default(autoincrement())
-  slug             String         @unique @db.VarChar(191)
-  title            String         @db.VarChar(191)
+  slug             String         @unique
+  title            String
   excerpt          String?        @db.Text
-  body             String         @db.LongText
-  status           String         @default("draft") @db.VarChar(32)
+  body             String         @db.Text
+  status           String         @default("draft")
   featuredImageUrl String?        @db.Text
-  featuredImageAlt String?        @db.VarChar(191)
-  metaTitle        String?        @db.VarChar(191)
-  metaDescription  String?        @db.VarChar(300)
+  featuredImageAlt String?
+  metaTitle        String?
+  metaDescription  String?
   canonicalUrl     String?        @db.Text
   ogImageUrl       String?        @db.Text
   publishedAt      DateTime?
@@ -188,8 +187,8 @@ model Post {
 
 model Category {
   id          Int            @id @default(autoincrement())
-  slug        String         @unique @db.VarChar(191)
-  name        String         @db.VarChar(191)
+  slug        String         @unique
+  name        String
   description String?        @db.Text
   parent      Category?      @relation("CategoryParent", fields: [parentId], references: [id])
   parentId    Int?
@@ -203,8 +202,8 @@ model Category {
 
 model Tag {
   id        Int       @id @default(autoincrement())
-  slug      String    @unique @db.VarChar(191)
-  name      String    @db.VarChar(191)
+  slug      String    @unique
+  name      String
   posts     PostTag[]
   createdAt DateTime  @default(now())
 }
@@ -242,10 +241,10 @@ model Comment {
   replies     Comment[] @relation("CommentThread")
   author      User?     @relation(fields: [authorId], references: [id])
   authorId    Int?
-  authorName  String    @db.VarChar(191)
-  authorEmail String?   @db.VarChar(191)
+  authorName  String
+  authorEmail String?
   body        String    @db.Text
-  status      String    @default("pending") @db.VarChar(32)
+  status      String    @default("pending")
   isStaff     Boolean   @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt

@@ -1,6 +1,6 @@
 # Vamos Properties LLC — system architecture
 
-Next.js 16 App Router on Vercel. MySQL on AWS EC2 via Prisma 5 (`@prisma/client` + `mysql2`). Email through Resend. SMS through Twilio. Marketing pages are cached Server Components. Leads, admin, and webhooks stay dynamic.
+Next.js 16 App Router on Vercel. PostgreSQL via Prisma 5 (`@prisma/client`). Email through Resend. SMS through Twilio. Marketing pages are cached Server Components. Leads, admin, and webhooks stay dynamic.
 
 `cacheComponents` and `partialPrefetching` are already enabled in `next.config.ts`. Caching uses `use cache` and `cacheLife`. Request interception, if needed later, uses root `proxy.ts` (Next.js 16 renamed Middleware to Proxy).
 
@@ -94,29 +94,15 @@ A new lead write is one transaction: lead + consent rows + the `created` event. 
 
 | Name | Use |
 | --- | --- |
-| `DATABASE_URL` | MySQL URL for the Vercel runtime and for `prisma migrate` / `db push` |
-| `MYSQL_SSL_MODE` | `required` (TLS, self-signed OK), `strict` (verify cert), or `off` |
+| `DATABASE_URL` | Pooled Postgres connection for the Vercel runtime and for `prisma db push` |
 | `RESEND_API_KEY` | Sending |
 | `RESEND_WEBHOOK_SECRET` | Inbound verification |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Sending and signature checks |
 | `ADMIN_SESSION_SECRET` | Admin session |
 
-Local development uses MySQL and test Twilio/Resend credentials. Production webhooks point at the Vercel domain only.
+Local development uses a Postgres database and test Twilio/Resend credentials. Production webhooks point at the Vercel domain only.
 
-## MySQL on EC2, called from Vercel
-
-`getDb()` in `src/prisma/db.ts` builds one PrismaClient per serverless instance and stores it on `globalThis` so hot reload and warm lambdas reuse it. Missing pool params are filled in: `connection_limit=1`, `pool_timeout=10`, `connect_timeout=10`. That keeps each function from opening a pile of sockets against EC2 `max_connections`.
-
-TLS: set `MYSQL_SSL_MODE=required` on Vercel. Put `sslaccept=strict` on the URL (or `MYSQL_SSL_MODE=strict`) once the instance has a real certificate. Until then `required` encrypts the session and skips hostname checks, which is the usual self-signed EC2 setup.
-
-EC2 side:
-
-1. Security group: do not leave `3306` open to `0.0.0.0/0`. Allow the Vercel IP ranges you actually use, or put ProxySQL / stunnel on the instance and expose only that port.
-2. MySQL user: a dedicated app user, not `root`. Grant only the `vamos` database.
-3. `require_secure_transport=ON` so the server refuses plaintext.
-4. Bind-address and firewall still matter; TLS is not a substitute for a closed port.
-
-Schema lives in `prisma/schema.prisma`. Apply it with `npx prisma db push` on a fresh instance, or `npx prisma migrate deploy` once `prisma/migrations` is the source of truth. `npx prisma generate` runs on `postinstall` so Vercel builds the Linux query engine.
+`getDb()` in `src/prisma/db.ts` builds one PrismaClient per serverless instance and stores it on `globalThis`. Missing pool params are filled in: `connection_limit=1`, `pool_timeout=10`, `connect_timeout=10`. Schema lives in `prisma/schema.prisma`. Apply it with `npx prisma db push`. `npx prisma generate` runs on `postinstall`.
 
 ## Failure behavior
 

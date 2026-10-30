@@ -1,11 +1,11 @@
 import "server-only";
 
 /**
- * Shape DATABASE_URL for Vercel serverless → EC2 MySQL.
+ * Shape DATABASE_URL for Vercel serverless → PostgreSQL.
  * Never log the returned string. It contains the password.
  *
  * Each serverless instance opens its own Prisma pool. Keep connection_limit
- * at 1 so a traffic spike cannot exhaust EC2 max_connections.
+ * at 1 so a traffic spike cannot exhaust the remote pooler (PgBouncer / Neon).
  */
 
 const POOL_DEFAULTS: Record<string, string> = {
@@ -23,29 +23,18 @@ function appendParams(url: string, params: string[]) {
   return url + (url.includes("?") ? "&" : "?") + params.join("&");
 }
 
-export function isMysqlDatabaseUrl(raw = process.env.DATABASE_URL) {
-  const url = raw?.trim() ?? "";
-  return url.startsWith("mysql://") || url.startsWith("mysqls://");
-}
-
 export function runtimeDatabaseUrl(raw: string | undefined) {
   const url = raw?.trim();
   if (!url) {
     throw new Error("DATABASE_URL is not set.");
   }
-  if (!url.startsWith("mysql://") && !url.startsWith("mysqls://")) {
-    throw new Error("DATABASE_URL must be a mysql:// connection string.");
+  if (!url.startsWith("postgres://") && !url.startsWith("postgresql://")) {
+    throw new Error("DATABASE_URL must be a postgres:// connection string.");
   }
 
   const params: string[] = [];
   for (const [key, value] of Object.entries(POOL_DEFAULTS)) {
     if (!hasParam(url, key)) params.push(`${key}=${value}`);
-  }
-
-  const sslMode = (process.env.MYSQL_SSL_MODE ?? "").trim().toLowerCase();
-  const sslAlready = hasParam(url, "sslaccept") || hasParam(url, "ssl") || hasParam(url, "sslcert");
-  if (!sslAlready && sslMode && sslMode !== "off") {
-    params.push(sslMode === "strict" ? "sslaccept=strict" : "sslaccept=accept_invalid_certs");
   }
 
   return appendParams(url, params);
